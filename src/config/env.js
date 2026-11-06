@@ -1,4 +1,5 @@
 import "dotenv/config";
+import os from "os";
 
 export const env = {
     dbHost: process.env.DB_HOST,
@@ -8,12 +9,15 @@ export const env = {
     dbName: process.env.DB_NAME,
 
     serverPort: Number(process.env.SERVER_PORT) || 3000,
+    instanceId: process.env.INSTANCE_ID || `${os.hostname()}-${process.pid}`,
 
     redisHost: process.env.REDIS_HOST || "127.0.0.1",
     redisPort: Number(process.env.REDIS_PORT) || 6379,
 
-    jwtSecret: process.env.JWT_SECRET,
-    jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
+    jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
+    jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "1d",
+    jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
+    jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
     smtpHost: process.env.SMTP_HOST,
     smtpPort: Number(process.env.SMTP_PORT) || 587,
