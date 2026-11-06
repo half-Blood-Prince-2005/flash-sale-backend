@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
-import { AppError } from "./errorHandeler.js";
+import { AppError } from "./errorHandler.js";
 
 // Any logged-in user, including admins.
 // Expects the header "Authorization: Bearer <access token>" and puts the

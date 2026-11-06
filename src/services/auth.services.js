@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import pool from "../config/db.js";
 import redis from "../config/redis.js";
 import { env } from "../config/env.js";
-import { AppError } from "../middlewares/errorHandeler.js";
+import { AppError } from "../middlewares/errorHandler.js";
 
 const SALT_ROUNDS = 12;
 
