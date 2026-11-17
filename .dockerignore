@@ -1,0 +1,6 @@
+# Installed fresh inside the image. Windows builds of bcrypt won't run on Linux.
+node_modules
+# Secrets are passed in at run time, never baked into the image.
+.env
+.git
+*.log

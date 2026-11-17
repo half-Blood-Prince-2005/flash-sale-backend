@@ -1,0 +1,55 @@
+# Fixed project name, so containers are always flashsale-api-1, -2, -3.
+# nginx.conf refers to them by these names.
+name: flashsale
+
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      # Inside Compose, Redis is reached by its service name, not localhost.
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SERVER_PORT: "3000"
+      # Empty, so each container falls back to its own hostname. Needed once
+      # several API containers run behind nginx.
+      INSTANCE_ID: ""
+    # Not published: all traffic comes in through nginx.
+    # nginx.conf lists exactly 3 API containers. Change both together.
+    deploy:
+      replicas: 3
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+
+  nginx:
+    # 1.28 or newer is needed for "resolve" in the upstream block.
+    image: nginx:1.28-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # appendonly: Redis writes every change to disk, so refresh tokens and
+    # stock counters survive a restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    # No ports: only the API container can reach it.
+
+volumes:
+  redis-data:

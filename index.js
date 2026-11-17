@@ -8,6 +8,8 @@ import orderRoutes from "./src/routes/order.routes.js";
 import { notFound, errorHandler } from "./src/middlewares/errorHandler.js";
 
 const app = express();
+// Nginx sits in front. Trust its X-Forwarded-For header so req.ip is the real client.
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(express.json());
 
