@@ -9,7 +9,10 @@ const pool = mysql.createPool({
     database: env.dbName,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    // Send and read dates as UTC to match the database. Without this, mysql2 uses
+    // this machine's time zone and every saved date is shifted by the offset.
+    timezone: "Z",
 });
 
 export async function checkDbConnection() {

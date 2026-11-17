@@ -6,7 +6,7 @@ import redis from "../config/redis.js";
 import { env } from "../config/env.js";
 import { AppError } from "../middlewares/errorHandler.js";
 
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS = 10;
 
 // Compared against when the email doesn't exist, so a missing user
 // takes as long as a wrong password and can't be detected by timing.

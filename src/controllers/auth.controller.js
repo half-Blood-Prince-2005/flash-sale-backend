@@ -1,6 +1,6 @@
 import * as authService from "../services/auth.services.js";
+import { parseBody } from "../validators/parseBody.js";
 import {
-    parseBody,
     registerSchema,
     loginSchema,
     refreshSchema,
