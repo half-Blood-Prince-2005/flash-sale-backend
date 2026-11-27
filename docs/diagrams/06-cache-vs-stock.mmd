@@ -1,0 +1,10 @@
+flowchart LR
+    subgraph Cache ["products:active (a photo)"]
+        L["The whole product list<br/>as one JSON string<br/>expires every 2 seconds"]
+    end
+    subgraph Counter ["stock:{productId} (the till counter)"]
+        S["One number per product<br/>the units left right now"]
+    end
+    MySQL[("MySQL products")] -->|"rebuilt from"| L
+    MySQL -->|"load-stock copies it once, before the sale"| S
+    S -->|"each purchase lowers it"| S

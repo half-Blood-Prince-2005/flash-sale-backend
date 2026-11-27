@@ -1,0 +1,9 @@
+{
+  "theme": "neutral",
+  "themeVariables": {
+    "fontFamily": "Helvetica, Arial, sans-serif",
+    "fontSize": "15px"
+  },
+  "flowchart": { "padding": 12, "nodeSpacing": 40, "rankSpacing": 50 },
+  "sequence": { "mirrorActors": false }
+}

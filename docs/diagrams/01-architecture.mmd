@@ -1,0 +1,21 @@
+flowchart LR
+    Client["Browser / app"] -->|"port 80"| Nginx
+
+    subgraph Stack ["Docker Compose"]
+        Nginx["Nginx<br/>load balancer<br/>rate limits"]
+        API1["API copy 1"]
+        API2["API copy 2"]
+        API3["API copy 3"]
+        Redis[("Redis<br/>locks, stock counters,<br/>cache, sessions")]
+    end
+
+    Nginx --> API1
+    Nginx --> API2
+    Nginx --> API3
+    API1 --> Redis
+    API2 --> Redis
+    API3 --> Redis
+    API1 --> MySQL
+    API2 --> MySQL
+    API3 --> MySQL
+    MySQL[("MySQL on AWS RDS<br/>users, products, orders")]

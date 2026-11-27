@@ -1,0 +1,31 @@
+flowchart TD
+    Start(["POST /api/orders<br/>with Idempotency-Key"]) --> G1
+
+    subgraph Gate1 ["Gate 1: Is this a repeat?"]
+        G1{"Idempotency note<br/>in Redis?"}
+    end
+
+    G1 -->|"done"| Saved(["201: return the saved order"])
+    G1 -->|"processing"| InProg(["409 PURCHASE_IN_PROGRESS"])
+    G1 -->|"same key, different item"| Reused(["422 IDEMPOTENCY_KEY_REUSED"])
+    G1 -->|"none: write 'processing'"| Sold
+
+    Sold{"Redis stock counter<br/>below quantity?"}
+    Sold -->|"yes"| SoldOut(["409 SOLD_OUT<br/>no lock, no database"])
+    Sold -->|"no, or not loaded"| G2
+
+    subgraph Gate2 ["Gate 2: One at a time"]
+        G2{"Take the product lock<br/>SET NX, 5s expiry"}
+    end
+
+    G2 -->|"someone else has it"| Busy(["429 HIGH_TRAFFIC<br/>Retry-After: 1"])
+    G2 -->|"got it"| G3
+
+    subgraph Gate3 ["Gate 3: The real decision, in one MySQL transaction"]
+        G3["Lock the product row<br/>SELECT ... FOR UPDATE"] --> Check{"Active? Sale open?<br/>Enough stock?"}
+        Check -->|"yes"| Write["Lower stock<br/>Insert the order<br/>COMMIT"]
+    end
+
+    Check -->|"no"| Rejected(["404 / 409<br/>everything rolled back"])
+    Write --> After["Update the Redis stock counter<br/>Save the order as 'done'<br/>Release the lock"]
+    After --> Created(["201: new order"])

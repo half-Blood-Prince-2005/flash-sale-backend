@@ -1,0 +1,30 @@
+erDiagram
+    USERS ||--o{ ORDERS : places
+    PRODUCTS ||--o{ ORDERS : "is bought in"
+
+    USERS {
+        char36 id PK
+        string email UK
+        string password_hash
+        enum role "USER or ADMIN"
+        timestamp created_at
+    }
+    PRODUCTS {
+        char36 id PK
+        string title
+        bigint price_paise "money in whole paise"
+        int stock_quantity "CHECK >= 0"
+        timestamp sale_starts_at
+        timestamp sale_ends_at
+        bool is_active
+    }
+    ORDERS {
+        char36 id PK
+        char36 user_id FK
+        char36 product_id FK
+        int quantity "CHECK > 0"
+        bigint unit_price_paise "price at time of purchase"
+        bigint total_amount_paise
+        enum status "PENDING, COMPLETED, FAILED"
+        string idempotency_key "UNIQUE with user_id"
+    }
