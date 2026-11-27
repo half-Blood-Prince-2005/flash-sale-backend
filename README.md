@@ -30,29 +30,9 @@ Built with Node.js, Express 5, MySQL, Redis, Docker Compose and Nginx.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Client["Browser / app"] -->|"port 80"| Nginx
+![Architecture: browser to Nginx, Nginx to three API copies, each API copy to Redis and to MySQL on AWS RDS](docs/diagrams/01-architecture.png)
 
-    subgraph Stack ["Docker Compose"]
-        Nginx["Nginx<br/>load balancer<br/>rate limits"]
-        API1["API copy 1"]
-        API2["API copy 2"]
-        API3["API copy 3"]
-        Redis[("Redis<br/>locks, stock counters,<br/>cache, sessions")]
-    end
-
-    Nginx --> API1
-    Nginx --> API2
-    Nginx --> API3
-    API1 --> Redis
-    API2 --> Redis
-    API3 --> Redis
-    API1 --> MySQL
-    API2 --> MySQL
-    API3 --> MySQL
-    MySQL[("MySQL on AWS RDS<br/>users, products, orders")]
-```
+<sub>Diagram source: [`docs/diagrams/01-architecture.mmd`](docs/diagrams/01-architecture.mmd)</sub>
 
 | Part | Job |
 |---|---|
@@ -71,39 +51,9 @@ A story makes this easier. **10 pairs of sneakers. 2,000 people press Buy at 8:0
 
 Every purchase request passes through three gates. Each gate solves a different problem.
 
-```mermaid
-flowchart TD
-    Start(["POST /api/orders<br/>with Idempotency-Key"]) --> G1
+![Order flow: gate 1 idempotency check, the sold-out shortcut, gate 2 Redis lock, gate 3 MySQL transaction, and every possible answer](docs/diagrams/02-order-flow.png)
 
-    subgraph Gate1 ["Gate 1: Is this a repeat?"]
-        G1{"Idempotency note<br/>in Redis?"}
-    end
-
-    G1 -->|"done"| Saved(["201: return the saved order"])
-    G1 -->|"processing"| InProg(["409 PURCHASE_IN_PROGRESS"])
-    G1 -->|"same key, different item"| Reused(["422 IDEMPOTENCY_KEY_REUSED"])
-    G1 -->|"none: write 'processing'"| Sold
-
-    Sold{"Redis stock counter<br/>below quantity?"}
-    Sold -->|"yes"| SoldOut(["409 SOLD_OUT<br/>no lock, no database"])
-    Sold -->|"no, or not loaded"| G2
-
-    subgraph Gate2 ["Gate 2: One at a time"]
-        G2{"Take the product lock<br/>SET NX, 5s expiry"}
-    end
-
-    G2 -->|"someone else has it"| Busy(["429 HIGH_TRAFFIC<br/>Retry-After: 1"])
-    G2 -->|"got it"| G3
-
-    subgraph Gate3 ["Gate 3: The real decision, in one MySQL transaction"]
-        G3["Lock the product row<br/>SELECT ... FOR UPDATE"] --> Check{"Active? Sale open?<br/>Enough stock?"}
-        Check -->|"yes"| Write["Lower stock<br/>Insert the order<br/>COMMIT"]
-    end
-
-    Check -->|"no"| Rejected(["404 / 409<br/>everything rolled back"])
-    Write --> After["Update the Redis stock counter<br/>Save the order as 'done'<br/>Release the lock"]
-    After --> Created(["201: new order"])
-```
+<sub>Diagram source: [`docs/diagrams/02-order-flow.mmd`](docs/diagrams/02-order-flow.mmd)</sub>
 
 Whenever a purchase fails, its idempotency note is deleted so a retry can run again, and the lock is always released.
 
@@ -115,14 +65,9 @@ When Rahul opens checkout, his app creates a random key for that purchase attemp
 
 The server keeps a note in Redis under `idem:{userId}:{key}`. The user ID is part of the name, so one person can never see another person's order.
 
-```mermaid
-stateDiagram-v2
-    [*] --> Processing: first request writes it, expires in 30s
-    Processing --> Done: order saved, note kept 24h
-    Processing --> [*]: purchase failed, note deleted
-    Processing --> [*]: server crashed, note expires
-    Done --> [*]: expires after 24h
-```
+![Idempotency note lifecycle: processing for 30 seconds, then done for 24 hours, or deleted on failure, or expired after a crash](docs/diagrams/03-idempotency-note.png)
+
+<sub>Diagram source: [`docs/diagrams/03-idempotency-note.mmd`](docs/diagrams/03-idempotency-note.mmd)</sub>
 
 | What happens | Note found | Answer |
 |---|---|---|
@@ -169,35 +114,9 @@ Inside one all-or-nothing transaction:
 
 ### One purchase, step by step
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Rahul as Rahul's app
-    participant N as Nginx
-    participant A as API copy
-    participant R as Redis
-    participant M as MySQL
+![One purchase step by step: the 19 messages between the app, Nginx, an API copy, Redis and MySQL](docs/diagrams/04-one-purchase.png)
 
-    Rahul->>N: POST /api/orders with Idempotency-Key abc-123
-    N->>A: forward to the next copy in turn
-    A->>R: SET idem:rahul:abc-123 "processing" NX EX 30
-    R-->>A: OK, this is new
-    A->>R: GET stock:sneakers
-    R-->>A: 7 left
-    A->>R: SET lock:product:sneakers token NX PX 5000
-    R-->>A: OK, lock taken
-    A->>M: BEGIN
-    A->>M: SELECT ... FOR UPDATE
-    M-->>A: active, sale open, stock 7
-    A->>M: UPDATE products SET stock_quantity = stock_quantity - 1
-    A->>M: INSERT INTO orders ...
-    A->>M: COMMIT
-    A->>R: SET stock:sneakers 6
-    A->>R: SET idem:rahul:abc-123 "done + order" EX 86400
-    A->>R: DEL lock:product:sneakers
-    A-->>N: 201 Created, the order
-    N-->>Rahul: 201 Created, the order
-```
+<sub>Diagram source: [`docs/diagrams/04-one-purchase.mmd`](docs/diagrams/04-one-purchase.mmd)</sub>
 
 ### How 8:00 PM plays out
 
@@ -223,29 +142,9 @@ Two tokens, each signed with its own secret:
 | **Access token** | 1 day | user ID, email, role | Every API call, in `Authorization: Bearer <token>` |
 | **Refresh token** | 7 days | user ID and a unique token ID | Getting a new pair of tokens |
 
-```mermaid
-sequenceDiagram
-    actor U as App
-    participant A as API
-    participant R as Redis
-    participant M as MySQL
+![Login and token refresh: login stores a refresh token in Redis; after the access token expires, refresh deletes the old token and issues a new pair](docs/diagrams/05-auth-refresh.png)
 
-    U->>A: POST /api/auth/login (email, password)
-    A->>M: find the user, check the bcrypt hash
-    A->>R: SET refresh:{tokenId} userId, expires in 7 days
-    A-->>U: user, accessToken, refreshToken
-
-    Note over U,A: ...a day later the access token expires...
-
-    U->>A: any request with the old access token
-    A-->>U: 401 TOKEN_EXPIRED
-    U->>A: POST /api/auth/refresh (refreshToken)
-    A->>R: DEL refresh:{tokenId}
-    R-->>A: 1 = it existed, so this token is valid and now used up
-    A->>M: reload the user, so role changes apply at once
-    A->>R: SET refresh:{newTokenId}
-    A-->>U: new accessToken and new refreshToken
-```
+<sub>Diagram source: [`docs/diagrams/05-auth-refresh.mmd`](docs/diagrams/05-auth-refresh.mmd)</sub>
 
 - **Refresh tokens work once.** Using one deletes it, so a stolen token that was already used is worthless. If two requests send the same token at once, only one succeeds.
 - **Logout** deletes the refresh token's Redis entry, so it stops working immediately.
@@ -258,18 +157,9 @@ sequenceDiagram
 
 Redis holds two very different kinds of product data.
 
-```mermaid
-flowchart LR
-    subgraph Cache ["products:active (a photo)"]
-        L["The whole product list<br/>as one JSON string<br/>expires every 2 seconds"]
-    end
-    subgraph Counter ["stock:{productId} (the till counter)"]
-        S["One number per product<br/>the units left right now"]
-    end
-    MySQL[("MySQL products")] -->|"rebuilt from"| L
-    MySQL -->|"load-stock copies it once, before the sale"| S
-    S -->|"each purchase lowers it"| S
-```
+![Two kinds of product data in Redis: the product list cache rebuilt from MySQL every 2 seconds, and per-product stock counters loaded once before the sale](docs/diagrams/06-cache-vs-stock.png)
+
+<sub>Diagram source: [`docs/diagrams/06-cache-vs-stock.mmd`](docs/diagrams/06-cache-vs-stock.mmd)</sub>
 
 | | `products:active` | `stock:{productId}` |
 |---|---|---|
@@ -286,38 +176,9 @@ flowchart LR
 
 ## Data model
 
-```mermaid
-erDiagram
-    USERS ||--o{ ORDERS : places
-    PRODUCTS ||--o{ ORDERS : "is bought in"
+![Data model: users and products each have many orders; the columns of the users, products and orders tables](docs/diagrams/07-data-model.png)
 
-    USERS {
-        char36 id PK
-        string email UK
-        string password_hash
-        enum role "USER or ADMIN"
-        timestamp created_at
-    }
-    PRODUCTS {
-        char36 id PK
-        string title
-        bigint price_paise "money in whole paise"
-        int stock_quantity "CHECK >= 0"
-        timestamp sale_starts_at
-        timestamp sale_ends_at
-        bool is_active
-    }
-    ORDERS {
-        char36 id PK
-        char36 user_id FK
-        char36 product_id FK
-        int quantity "CHECK > 0"
-        bigint unit_price_paise "price at time of purchase"
-        bigint total_amount_paise
-        enum status "PENDING, COMPLETED, FAILED"
-        string idempotency_key "UNIQUE with user_id"
-    }
-```
+<sub>Diagram source: [`docs/diagrams/07-data-model.mmd`](docs/diagrams/07-data-model.mmd)</sub>
 
 - **Money is stored as whole paise** (₹4,999.00 is `499900`), so there are never rounding errors.
 - **Each order stores its own unit price,** so changing a product's price never changes old orders.

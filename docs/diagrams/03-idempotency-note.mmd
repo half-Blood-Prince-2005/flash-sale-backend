@@ -1,0 +1,6 @@
+stateDiagram-v2
+    [*] --> Processing: first request writes it, expires in 30s
+    Processing --> Done: order saved, note kept 24h
+    Processing --> [*]: purchase failed, note deleted
+    Processing --> [*]: server crashed, note expires
+    Done --> [*]: expires after 24h

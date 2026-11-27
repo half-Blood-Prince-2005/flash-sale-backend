@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor U as App
+    participant A as API
+    participant R as Redis
+    participant M as MySQL
+
+    U->>A: POST /api/auth/login (email, password)
+    A->>M: find the user, check the bcrypt hash
+    A->>R: SET refresh:{tokenId} userId, expires in 7 days
+    A-->>U: user, accessToken, refreshToken
+
+    Note over U,A: ...a day later the access token expires...
+
+    U->>A: any request with the old access token
+    A-->>U: 401 TOKEN_EXPIRED
+    U->>A: POST /api/auth/refresh (refreshToken)
+    A->>R: DEL refresh:{tokenId}
+    R-->>A: 1 = it existed, so this token is valid and now used up
+    A->>M: reload the user, so role changes apply at once
+    A->>R: SET refresh:{newTokenId}
+    A-->>U: new accessToken and new refreshToken

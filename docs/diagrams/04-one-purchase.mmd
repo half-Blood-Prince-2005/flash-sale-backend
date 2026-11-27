@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    actor Rahul as Rahul's app
+    participant N as Nginx
+    participant A as API copy
+    participant R as Redis
+    participant M as MySQL
+
+    Rahul->>N: POST /api/orders with Idempotency-Key abc-123
+    N->>A: forward to the next copy in turn
+    A->>R: SET idem:rahul:abc-123 "processing" NX EX 30
+    R-->>A: OK, this is new
+    A->>R: GET stock:sneakers
+    R-->>A: 7 left
+    A->>R: SET lock:product:sneakers token NX PX 5000
+    R-->>A: OK, lock taken
+    A->>M: BEGIN
+    A->>M: SELECT ... FOR UPDATE
+    M-->>A: active, sale open, stock 7
+    A->>M: UPDATE products SET stock_quantity = stock_quantity - 1
+    A->>M: INSERT INTO orders ...
+    A->>M: COMMIT
+    A->>R: SET stock:sneakers 6
+    A->>R: SET idem:rahul:abc-123 "done + order" EX 86400
+    A->>R: DEL lock:product:sneakers
+    A-->>N: 201 Created, the order
+    N-->>Rahul: 201 Created, the order
